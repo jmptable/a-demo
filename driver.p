@@ -4,17 +4,32 @@
 
 #include "macros.p"
 
-#define PIN_ROTATION 13
+#define PIN_ROTATION    13
+#define PIN_CLOCK       22
 
-#define NUM_SLICES  8
-#define NUM_ROWS    32
-#define NUM_BITS    32
-#define NUM_COLS    64
+#define NUM_SLICES      8
+#define NUM_ROWS        32
+#define NUM_BITS        32
+#define NUM_COLS        64
 
-#define rDataAddress    r10
-#define rSliceCount     r11
-#define rColCount       r12
-#define rBitCount       r13
+#define MASK_CLOCK      1 << PIN_CLOCK
+#define MASK_GPIO1      0x000ff0ff
+#define MASK_GPIO2      (0xffff << 2)
+
+#define rClear1         r4
+#define rSet1           r5
+#define rClear2         r6
+#define rSet2           r7
+
+#define rMaskClock      r8
+#define rMask1          r9
+#define rMask2          r10
+
+#define rAddress        r11
+#define rCurrentAddress r12
+#define rSliceCount     r13
+#define rColCount       r14
+#define rBitCount       r15
 
 .setcallreg RET_REG
 
@@ -31,59 +46,66 @@ start:
     mov     r1, PRU1_CTRL + CTPPR1
     sbbo    r0, r1, 0, 4
 
+    // prepare IO addresses
+    mov     rClear1, GPIO1 | GPIO_CLEARDATAOUT
+    mov     rSet1, GPIO1 | GPIO_SETDATAOUT
+    mov     rClear2, GPIO2 | GPIO_CLEARDATAOUT
+    mov     rSet2, GPIO2 | GPIO_SETDATAOUT
+
+    // prepare masks
+    mov     rMaskClock, MASK_CLOCK
+    mov     rMask1, MASK_GPIO1
+    mov     rMask2, MASK_GPIO2
+
     // unsuspend the GPIO clocks
     StartClocks
 
-interrupt_loop:
+rotation_sync:
     // wait for rotation sync
-    qbbs    interrupt_loop, r31, PIN_ROTATION
-start_frame:
-    lbbo    r15, r10, 0, 4
-    add     r15, r15, 1
-    sbbo    r15, r10, 0, 4
+    qbbs    rotation_sync, r31, PIN_ROTATION
 
-temp: // wait for sync to end
-    qbbc    temp, r31, PIN_ROTATION
+    // reset the address
+    mov     rCurrentAddress, rAddress
 
-    jmp     interrupt_loop
+    ldi     rSliceCount, NUM_SLICES
+slice_start:
+    ldi     rColCount, NUM_COLS + 1 // extra for start frame
+col_start:
+    ldi     rBitCount, NUM_BITS
+col_out:
+    // load the next column of bits
+    lbbo    r1, rCurrentAddress, 0, 4
+    add     rCurrentAddress, rCurrentAddress, 4
+    lbbo    r2, rCurrentAddress, 0, 4
+    add     rCurrentAddress, rCurrentAddress, 4
+
+    // clear old output
+    sbbo    rMask1, rClear1, 0, 4
+    sbbo    rMask2, rClear2, 0, 4
+
+    // set new output
+    sbbo    r1, rSet1, 0, 4
+    sbbo    r2, rSet2, 0, 4
+
+    // clock out bit column
+    sbbo    rMaskClock, rClear2, 0, 4
+    sbbo    rMaskClock, rSet2, 0, 4
+
+    // done LED column?
+    dec     rBitCount
+    qbne    col_out, rBitCount, 0
+
+    // done slice?
+    dec     rColCount
+    qbne    col_start, rColCount, 0
+
+    // done frame?
+    dec     rSliceCount
+    qbne    slice_start, rSliceCount, 0
+
+    jmp     rotation_sync
 
 die:
     // notify host program of finish
     mov     r31.b0, PRU0_ARM_INTERRUPT + 16
     halt
-
-write_data:
-    mov     r9, 32
-write_data_next:
-    qbbs    write_data_1, r10, 0
-write_data_0:
-    mov     r0, GPIO1 | GPIO_CLEARDATAOUT
-    mov     r1, 0xff0ff
-    sbbo    r1, r0, 0, 4
-
-    mov     r0, GPIO2 | GPIO_CLEARDATAOUT
-    mov     r1, 0x3fffc
-    sbbo    r1, r0, 0, 4
-
-    qba     write_data_end
-write_data_1:
-    mov     r0, GPIO1 | GPIO_SETDATAOUT
-    mov     r1, 0xff0ff
-    sbbo    r1, r0, 0, 4
-
-    mov     r0, GPIO2 | GPIO_SETDATAOUT
-    mov     r1, 0x3fffc
-    sbbo    r1, r0, 0, 4
-write_data_end:
-    IOLow   GPIO2, 22 // clock out
-    Delay   0xf000
-
-    IOHigh  GPIO2, 22
-    Delay   0xf000
-
-    lsr     r10, r10, 1
-
-    dec     r9
-    qbne    write_data_next, r9, 0
-
-    ret

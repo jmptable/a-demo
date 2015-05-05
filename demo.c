@@ -94,7 +94,7 @@ void writeReg(int reg, uint32_t value) {
 void generateFrame() {
     int sliceNum = 8;//100;
     int rowNum = 32;
-    int colNum = 64;
+    int colNum = 64 + 1; // extra for start frame
     int bitNum = 32; // bits per LED
     int gpioNum = 2;
 
@@ -105,19 +105,30 @@ void generateFrame() {
     frameBuffer = ddrMem;
 
     for (int slice = 0; slice < sliceNum; slice++) {
-        double paletteIndex = slice * 2.56;
+        double paletteIndex = 256.0 * (double) slice / 8.0;
 
         for (int x = 0; x < colNum; x++) {
             uint32_t column[rowNum]; // led values in one column
 
             // generate pixels for this column
-            for (int y = 0; y < rowNum; y++) {
-                uint8_t brightness = 0xff;
-                uint8_t r = cos(M_PI * paletteIndex / 128.0);
-                uint8_t g = sin(M_PI * paletteIndex / 128.0);
-                uint8_t b = 0;
+            if (x == 0) {
+                // start frame is zero
+                for (int y = 0; y < rowNum; y++)
+                    column[y] = 0;
+            } else {
+                for (int y = 0; y < rowNum; y++) {
+                    uint8_t brightness = 0xff;
+                    uint8_t v = slice % 2 == 0? 0 : 255;
+                    uint8_t r = v;//128*(1+cos(M_PI * paletteIndex / 128.0));
+                    uint8_t g = v;//128*(1+sin(M_PI * paletteIndex / 128.0));
+                    uint8_t b = v;//0;
 
-                column[y] = brightness << 24 | b << 16 | g << 8 | r;
+                    if (y == 0) {
+                        printf("%d, %d, %d\n", r, g, b);
+                    }
+
+                    column[y] = brightness << 24 | b << 16 | g << 8 | r;
+                }
             }
 
             // peel off bits into dwords serialized for the 32 outputs
@@ -126,7 +137,7 @@ void generateFrame() {
 
             for (int bit = 0; bit < bitNum; bit++) {
                 for (int idword = 0; idword < bitNum; idword++) {
-                    serialBuffer[bit] |= ((column[idword] >> bit) & 1) << idword;
+                    serialBuffer[bitNum - bit] |= ((column[idword] >> bit) & 1) << idword;
                 }
             }
 
@@ -159,18 +170,11 @@ int main(int argc, char* argv[]) {
 
     printf("ddr mem address is %x\n", address);
     printf("ddr mem size is %x\n", size);
-    writeReg(10, address);
+    writeReg(11, address);
 
     // check
     prussdrv_exec_program(PRU_NUM, "./driver.bin");
-
-    frameBuffer[0] = 0;
-    printf("\n");
-    for (int millis = 0; millis < 15000; millis++) {
-        printf("\r%d", frameBuffer[0]);
-        usleep(1000);
-    }
-
+    getchar();
     prussdrv_pru_disable(PRU_NUM);
     
     printf("\n--- registers ---\n");
