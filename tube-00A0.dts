@@ -1,0 +1,188 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "ti,beaglebone", "ti,beaglebone-black";
+
+	/* identification */
+	part-number = "tube";
+	version = "00A0";
+
+	exclusive-use =
+	    /* pins */
+        "P8.20", "gpio1_31",    // SENSOR_ROTATION
+        "P8.27", "gpio2_22",    // CLOCK
+
+		"P8.25", "gpio1_0",
+		"P8.24", "gpio1_1",
+        "P8.5", "gpio1_2",
+        "P8.6", "gpio1_3",
+		"P8.23", "gpio2_4",
+        "P8.22", "gpio1_5",
+        "P8.3", "gpio1_6",
+        "P8.4", "gpio1_7",
+
+        "P8.12", "gpio1_12",
+        "P8.11", "gpio1_13",
+        "P8.16", "gpio1_14",
+        "P8.15", "gpio1_15",
+        "P9.15", "gpio1_16",
+        "P9.23", "gpio1_17",
+        "P9.14", "gpio1_18",
+        "P9.16", "gpio1_19",
+
+        "P8.7", "gpio2_2",
+        "P8.8", "gpio2_3",
+        "P8.10", "gpio2_4",
+        "P8.9", "gpio2_5",
+        "P8.45", "gpio2_6",
+        "P8.46", "gpio2_7",
+        "P8.43", "gpio2_8",
+        "P8.44", "gpio2_9",
+        "P8.41", "gpio2_10",
+        "P8.42", "gpio2_11",
+        "P8.39", "gpio2_12",
+        "P8.40", "gpio2_13",
+        "P8.37", "gpio2_14",
+        "P8.38", "gpio2_15",
+        "P8.36", "gpio2_16",
+        "P8.34", "gpio2_17",
+
+		/* hardware IP cores */
+		"pruss";
+
+	fragment@0 {
+		target = <&am33xx_pinmux>;
+		__overlay__ {
+			tube_pins: pinmux_tube_pins {
+				pinctrl-single,pins = <
+                    0x084 0x37 // gpio1_31 (rotation sensor) input, pullup
+					0x0e0 0x07 // gpio2_22 (clock)
+
+					0x000 0x07 // gpio1_0
+                    0x004 0x07 // gpio1_1
+                    0x008 0x07 // gpio1_2
+					0x00c 0x07 // gpio1_3
+					0x010 0x07 // gpio1_4
+                    0x014 0x07 // gpio1_5
+                    0x018 0x07 // gpio1_6
+					0x01c 0x07 // gpio1_7
+
+					0x030 0x07 // gpio1_12
+                    0x034 0x07 // gpio1_13
+                    0x038 0x07 // gpio1_14
+					0x03c 0x07 // gpio1_15
+					0x040 0x07 // gpio1_16
+                    0x044 0x07 // gpio1_17
+                    0x048 0x07 // gpio1_18
+					0x04c 0x07 // gpio1_19
+
+					0x090 0x07 // gpio2_2
+                    0x094 0x07 // gpio2_3
+                    0x098 0x07 // gpio2_4
+					0x09c 0x07 // gpio2_5
+					0x0a0 0x07 // gpio2_6
+                    0x0a4 0x07 // gpio2_7
+                    0x0a8 0x07 // gpio2_8
+					0x0ac 0x07 // gpio2_9
+					0x0b0 0x07 // gpio2_10
+                    0x0b4 0x07 // gpio2_11
+                    0x0b8 0x07 // gpio2_12
+					0x0bc 0x07 // gpio2_13
+					0x0c0 0x07 // gpio2_14
+                    0x0c4 0x07 // gpio2_15
+                    0x0c8 0x07 // gpio2_16
+					0x0cc 0x07 // gpio2_17
+                >;
+            };
+        };
+    };
+
+ 	fragment@1 {
+  		target = <&pruss>;
+		__overlay__ {
+            status = "okay";
+            pinctrl-names = "default";
+            pinctrl-0 = <&tube_pins>;
+
+            sensor-rotation {
+                pin-names = "tbt:pru-sensor-rotation";
+                gpios = <&gpio2 31 0>;
+            };
+
+            clock {
+                pin-names = "tbt:pru-clock";
+                gpios = <&gpio3 22 0>;
+            };
+
+            data {
+                pin-names = "tbt:pru-d0",
+                            "tbt:pru-d1", 
+                            "tbt:pru-d2", 
+                            "tbt:pru-d3", 
+                            "tbt:pru-d4", 
+                            "tbt:pru-d5", 
+                            "tbt:pru-d6", 
+                            "tbt:pru-d7",
+                            "tbt:pru-d8", 
+                            "tbt:pru-d9", 
+                            "tbt:pru-d10", 
+                            "tbt:pru-d11", 
+                            "tbt:pru-d12", 
+                            "tbt:pru-d13", 
+                            "tbt:pru-d14", 
+                            "tbt:pru-d15", 
+                            "tbt:pru-d16", 
+                            "tbt:pru-d17",
+                            "tbt:pru-d18", 
+                            "tbt:pru-d19", 
+                            "tbt:pru-d20", 
+                            "tbt:pru-d21", 
+                            "tbt:pru-d22", 
+                            "tbt:pru-d23", 
+                            "tbt:pru-d24",
+                            "tbt:pru-d25", 
+                            "tbt:pru-d26", 
+                            "tbt:pru-d27", 
+                            "tbt:pru-d28", 
+                            "tbt:pru-d29", 
+                            "tbt:pru-d30", 
+                            "tbt:pru-d31";
+                gpios = <&gpio2 0 0
+                         &gpio2 1 0
+                         &gpio2 2 0
+                         &gpio2 3 0
+                         &gpio2 4 0
+                         &gpio2 5 0
+                         &gpio2 6 0
+                         &gpio2 7 0
+
+                         &gpio2 12 0
+                         &gpio2 13 0
+                         &gpio2 14 0
+                         &gpio2 15 0
+                         &gpio2 16 0
+                         &gpio2 17 0
+                         &gpio2 18 0
+                         &gpio2 19 0
+
+                         &gpio3 2 0
+                         &gpio3 3 0
+                         &gpio3 4 0
+                         &gpio3 5 0
+                         &gpio3 6 0
+                         &gpio3 7 0
+                         &gpio3 8 0
+                         &gpio3 9 0
+                         &gpio3 10 0
+                         &gpio3 11 0
+                         &gpio3 12 0
+                         &gpio3 13 0
+                         &gpio3 14 0
+                         &gpio3 15 0
+                         &gpio3 16 0
+                         &gpio3 17 0>;
+            };
+        };
+    };
+};

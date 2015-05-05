@@ -1,0 +1,9 @@
+# c compilation artifacts
+*.bin
+*.o
+
+# executable
+demo
+
+# compiled device tree overlays
+*.dtbo
