@@ -21,6 +21,24 @@ static uint32_t* ddrMem;
 static uint32_t* pruMem;
 static uint32_t* frameBuffer;
 
+uint32_t readHexFromFile(char* filepath) {
+    FILE* fp = fopen(filepath, "r");
+
+    fseek(fp, 0, SEEK_END);
+    long fsize = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    char* buffer = malloc(fsize + 1);
+    fread(buffer, fsize, 1, fp);
+    fclose(fp);
+
+    uint32_t value;
+    sscanf(buffer, "%x", &value);
+    free(buffer);
+
+    return value;
+}
+
 void initPRU() {
     // init pru driver
     prussdrv_init();
@@ -54,7 +72,9 @@ void initPRU() {
     }
 
     // map the memory
-    ddrMem = (uint32_t*)mmap(0, 256 * 1024, PROT_WRITE | PROT_READ, MAP_SHARED, mem_fd, 0x9e5c0000);
+    uint32_t address = readHexFromFile("/sys/class/uio/uio0/maps/map1/addr");
+    uint32_t size = readHexFromFile("/sys/class/uio/uio0/maps/map1/size");
+    ddrMem = (uint32_t*)mmap(0, size, PROT_WRITE | PROT_READ, MAP_SHARED, mem_fd, address);
 
     if (ddrMem == NULL) {
         printf("Failed to map the device (%s)\n", strerror(errno));
@@ -119,29 +139,11 @@ void generateFrame() {
                 // save to buffer
                 int index = gpioNum * (bitNum * (colNum * slice + x) + idword);
 
-                frameBuffer[index  ] = 0xffffffff;//GPIO0;
-                frameBuffer[index+1] = 0xeeeeeeee;//GPIO2;
+                frameBuffer[index  ] = GPIO0;
+                frameBuffer[index+1] = GPIO2;
             }
         }
     }
-}
-
-uint32_t readHexFromFile(char* filepath) {
-    FILE* fp = fopen(filepath, "r");
-
-    fseek(fp, 0, SEEK_END);
-    long fsize = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-
-    char* buffer = malloc(fsize + 1);
-    fread(buffer, fsize, 1, fp);
-    fclose(fp);
-
-    uint32_t value;
-    sscanf(buffer, "%x", &value);
-    free(buffer);
-
-    return value;
 }
 
 int main(int argc, char* argv[]) {
@@ -161,7 +163,14 @@ int main(int argc, char* argv[]) {
 
     // check
     prussdrv_exec_program(PRU_NUM, "./driver.bin");
-    sleep(1);
+
+    frameBuffer[0] = 0;
+    printf("\n");
+    for (int millis = 0; millis < 15000; millis++) {
+        printf("\r%d", frameBuffer[0]);
+        usleep(1000);
+    }
+
     prussdrv_pru_disable(PRU_NUM);
     
     printf("\n--- registers ---\n");
