@@ -7,3 +7,7 @@ demo
 
 # compiled device tree overlays
 *.dtbo
+
+# Vim swap files
+*.swp
+*.swo
