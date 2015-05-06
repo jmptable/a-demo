@@ -59,8 +59,8 @@ start:
 
 rotation_sync:
     // wait for rotation sync
-    Delay   LONG_TIME
-    //qbbs    rotation_sync, r31, PIN_ROTATION
+    qbbs    rotation_sync, r31, PIN_ROTATION
+    //Delay   LONG_TIME
 
     // reset the address
     mov     rCurrentAddress, rAddress
@@ -71,7 +71,7 @@ slice_start:
 col_start:
     ldi     rBitCount, NUM_BITS
 col_out:
-    // load the next column of bits
+    // load the next GPIO states into r1 and r2
     lbbo    r1, rCurrentAddress, 0, 4
     lbbo    r2, rCurrentAddress, 4, 4
     add     rCurrentAddress, rCurrentAddress, 8
@@ -96,7 +96,7 @@ col_out:
     dec     rRowCount
     qbne    col_start, rRowCount, 0
 
-    Delay   LONG_TIME / 256
+    //Delay   LONG_TIME / 512
 
     // done frame?
     dec     rSliceCount

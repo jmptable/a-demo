@@ -62,9 +62,6 @@ void init_memory() {
         exit(1);
     }
 
-    // initialize interface to PRU
-    pru_debug_init(mem_fd);
-
     // map the shared DDR memory
     uint32_t size = get_ddr_size();
     uint32_t* address = get_ddr_address();
@@ -127,6 +124,10 @@ int main(int argc, char* argv[]) {
     prussdrv_pruintc_init(&pruss_intc_initdata);
 
     init_memory();
+
+    // initialize interface to PRU
+    pru_debug_init(mem_fd);
+
 
     loadFrame(filepath);
 
