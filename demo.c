@@ -7,19 +7,16 @@
 #include <unistd.h>
 #include <string.h>
 
-#include <math.h>
+#include "pru-debug.h"
+#include "pru-interface.hp"
 
 #include "prussdrv.h"
 #include <pruss_intc_mapping.h>
 
 #define PRU_NUM 1
-#define PRU_INTGPR_REG  0x100
-#define DDR_BASEADDR    0x80000000
 
 static int mem_fd;
 static uint32_t* ddrMem;
-static uint32_t* pruMem;
-static uint32_t* frameBuffer;
 
 uint32_t readHexFromFile(char* filepath) {
     FILE* fp = fopen(filepath, "r");
@@ -39,21 +36,25 @@ uint32_t readHexFromFile(char* filepath) {
     return value;
 }
 
-void initPRU() {
-    // init pru driver
-    prussdrv_init();
+uint32_t* get_ddr_address() {
+    static uint32_t* address = NULL;
 
-    // open PRU interrupt
-    int ret = prussdrv_open(PRU_EVTOUT_0);
-    if (ret) {
-        printf("prussdrv_open open failed\n");
-        exit(1);
-    }
+    if (address == NULL)
+        address = (uint32_t*)readHexFromFile("/sys/class/uio/uio0/maps/map1/addr");
 
-    // init interrupt
-    tpruss_intc_initdata pruss_intc_initdata = PRUSS_INTC_INITDATA;
-    prussdrv_pruintc_init(&pruss_intc_initdata);
+    return address;
+}
 
+uint32_t get_ddr_size() {
+    static uint32_t size = ~0;
+
+    if (size == ~0)
+        size = readHexFromFile("/sys/class/uio/uio0/maps/map1/size");
+
+    return size;
+}
+
+void init_memory() {
     // open memory device
     mem_fd = open("/dev/mem", O_RDWR);
     if (mem_fd < 0) {
@@ -61,20 +62,13 @@ void initPRU() {
         exit(1);
     }
 
-    int pruss_len = 0x40000;
-    int opt_pruss_addr = 0x4a300000;
-    pruMem = (uint32_t*)mmap(0, pruss_len, PROT_WRITE | PROT_READ, MAP_SHARED, mem_fd, opt_pruss_addr);
+    // initialize interface to PRU
+    pru_debug_init(mem_fd);
 
-    if (pruMem == NULL) {
-        printf("Failed to map the device (%s)\n", strerror(errno));
-        close(mem_fd);
-        exit(1);
-    }
-
-    // map the memory
-    uint32_t address = readHexFromFile("/sys/class/uio/uio0/maps/map1/addr");
-    uint32_t size = readHexFromFile("/sys/class/uio/uio0/maps/map1/size");
-    ddrMem = (uint32_t*)mmap(0, size, PROT_WRITE | PROT_READ, MAP_SHARED, mem_fd, address);
+    // map the shared DDR memory
+    uint32_t size = get_ddr_size();
+    uint32_t* address = get_ddr_address();
+    ddrMem = (uint32_t*)mmap(0, size, PROT_WRITE | PROT_READ, MAP_SHARED, mem_fd, (int)address);
 
     if (ddrMem == NULL) {
         printf("Failed to map the device (%s)\n", strerror(errno));
@@ -83,120 +77,77 @@ void initPRU() {
     }
 }
 
-uint32_t readReg(int reg) {
-    return pruMem[PRU_INTGPR_REG + 0x9000 + reg];
-}
+void loadFrame(char* filepath) {
+    FILE* fp = fopen(filepath, "rb");
 
-void writeReg(int reg, uint32_t value) {
-    pruMem[PRU_INTGPR_REG + 0x9000 + reg] = value;
-}
+    // get the size
 
-void generateFrame() {
-    int sliceNum = 8;//100;
-    int rowNum = 32;
-    int colNum = 64 + 1; // extra for start frame
-    int bitNum = 32; // bits per LED
-    int gpioNum = 2;
+    fseek(fp, 0, SEEK_END);
+    long fsize = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
 
-    if (frameBuffer != NULL)
-        free(frameBuffer);
-
-    //frameBuffer = (uint32_t*)malloc(4 * gpioNum * bitNum * colNum * sliceNum);
-    frameBuffer = ddrMem;
-
-    for (int slice = 0; slice < sliceNum; slice++) {
-        double paletteIndex = 256.0 * (double) slice / 8.0;
-
-        for (int x = 0; x < colNum; x++) {
-            uint32_t column[rowNum]; // led values in one column
-
-            // generate pixels for this column
-            if (x == 0) {
-                // start frame is zero
-                for (int y = 0; y < rowNum; y++)
-                    column[y] = 0;
-            } else {
-                for (int y = 0; y < rowNum; y++) {
-                    uint8_t brightness = 0xff;
-                    uint8_t v = slice % 2 == 0? 0 : 255;
-                    uint8_t r = v;//128*(1+cos(M_PI * paletteIndex / 128.0));
-                    uint8_t g = v;//128*(1+sin(M_PI * paletteIndex / 128.0));
-                    uint8_t b = v;//0;
-
-                    if (y == 0) {
-                        printf("%d, %d, %d\n", r, g, b);
-                    }
-
-                    column[y] = brightness << 24 | b << 16 | g << 8 | r;
-                }
-            }
-
-            // peel off bits into dwords serialized for the 32 outputs
-
-            uint32_t serialBuffer[bitNum];
-
-            for (int bit = 0; bit < bitNum; bit++) {
-                for (int idword = 0; idword < bitNum; idword++) {
-                    serialBuffer[bitNum - bit] |= ((column[idword] >> bit) & 1) << idword;
-                }
-            }
-
-            for (int idword = 0; idword < bitNum; idword++) {
-                // split bits to match connections to GPIO registers
-                uint32_t v = serialBuffer[idword];
-                uint32_t GPIO0 = ((v & 0xff00) << 4) | (v & 0xff); // bits 0 -> 7 and 12 -> 19
-                uint32_t GPIO2 = (v >> 16) << 2; // bits 2 -> 17
-
-                // save to buffer
-                int index = gpioNum * (bitNum * (colNum * slice + x) + idword);
-
-                frameBuffer[index  ] = GPIO0;
-                frameBuffer[index+1] = GPIO2;
-            }
-        }
+    // validate size
+    
+    if (fsize != NUM_FRAME_BYTES) {
+        printf("Need file with %d bytes. Got file with %d bytes.\n", NUM_FRAME_BYTES, (unsigned int)fsize);
+        exit(1);
     }
+
+    if (get_ddr_size() < NUM_FRAME_BYTES) {
+        printf("The size of shared memory is too small! Need %d bytes but only have %d.\n", NUM_FRAME_BYTES, get_ddr_size());
+        printf("To set it correctly: \"modprobe uio_pruss extram_pool_sz=%x\"\n", NUM_FRAME_BYTES);
+        exit(1);
+    }
+
+    // read file into shared memory
+    fread(ddrMem, fsize, 1, fp);
+    fclose(fp);
 }
 
 int main(int argc, char* argv[]) {
-    initPRU();
-    generateFrame();
+    // parse cli arguments
 
-    // give PRU the buffer address
-    for (int i = 0; i < 30; i++)
-        writeReg(i, 0);
+    char* filepath;
 
-    uint32_t address = readHexFromFile("/sys/class/uio/uio0/maps/map1/addr");
-    uint32_t size = readHexFromFile("/sys/class/uio/uio0/maps/map1/size");
+    if (argc == 2) {
+        filepath = argv[1];
+    } else {
+        filepath = "gen.dat";
+    }
 
-    printf("ddr mem address is %x\n", address);
-    printf("ddr mem size is %x\n", size);
-    writeReg(11, address);
+    prussdrv_init();
 
-    // check
+    int ret = prussdrv_open(PRU_EVTOUT_0);
+    if (ret) {
+        printf("prussdrv_open open failed\n");
+        exit(1);
+    }
+
+    tpruss_intc_initdata pruss_intc_initdata = PRUSS_INTC_INITDATA;
+    prussdrv_pruintc_init(&pruss_intc_initdata);
+
+    init_memory();
+
+    loadFrame(filepath);
+
+    // tell the PRU where to find the data
+    pru_write_reg(REG_ADDRESS, (uint32_t)get_ddr_address());
+
+    // display!
     prussdrv_exec_program(PRU_NUM, "./driver.bin");
-    getchar();
-    prussdrv_pru_disable(PRU_NUM);
-    
-    printf("\n--- registers ---\n");
-    for(int i = 0; i < 32; i++) {
-        printf("r%d = %x\n", i, readReg(i));
-    }
+    getchar(); // hitting enter kills demo
 
-    printf("\n--- frame buffer ---\n");
-    for(int i = 0; i < 8; i++) {
-        printf("frameBuffer[%d] = %x\n", i, frameBuffer[i]);
-    }
+    // cleanup
 
     // disable pru
     prussdrv_pru_disable(PRU_NUM);
     prussdrv_exit();
+    pru_debug_exit();
 
     // undo memory mapping
     munmap(ddrMem, 0x0FFFFFFF);
     close(mem_fd);
 
-    printf("done\n");
-
-    return(0);
+    return 0;
 }
 

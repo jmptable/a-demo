@@ -1,4 +1,4 @@
-C_FILES := demo.c
+C_FILES := demo.c pru-debug.c
 P_FILES := driver.p
 DTS_FILES := tube-00A0.dts
 

@@ -1,0 +1,13 @@
+// syntax here needs to satisfy both C and pasm
+
+#define NUM_SLICES  8
+#define NUM_GPIO    2
+#define NUM_BITS    32
+#define NUM_ROWS    (64 + 1) // extra for start frame
+#define NUM_COLS    32
+
+// # of unsplit dwords
+#define NUM_DWORDS      (NUM_BITS * NUM_ROWS * NUM_SLICES)
+#define NUM_FRAME_BYTES (NUM_DWORDS * NUM_GPIO * 4)
+
+#define REG_ADDRESS 28

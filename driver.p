@@ -1,16 +1,12 @@
 #include <pru.h>
 
-#define RET_REG     r28.w0
+#define RET_REG     r29.w0
 
 #include "macros.p"
+#include "pru-interface.hp"
 
 #define PIN_ROTATION    13
 #define PIN_CLOCK       22
-
-#define NUM_SLICES      8
-#define NUM_ROWS        32
-#define NUM_BITS        32
-#define NUM_COLS        64
 
 #define MASK_CLOCK      1 << PIN_CLOCK
 #define MASK_GPIO1      0x000ff0ff
@@ -25,11 +21,12 @@
 #define rMask1          r9
 #define rMask2          r10
 
-#define rAddress        r11
-#define rCurrentAddress r12
-#define rSliceCount     r13
-#define rColCount       r14
-#define rBitCount       r15
+#define rCurrentAddress r11
+#define rSliceCount     r12
+#define rRowCount       r13
+#define rBitCount       r14
+
+#define rAddress        REG_ADDRESS
 
 .setcallreg RET_REG
 
@@ -62,22 +59,22 @@ start:
 
 rotation_sync:
     // wait for rotation sync
-    qbbs    rotation_sync, r31, PIN_ROTATION
+    Delay   LONG_TIME
+    //qbbs    rotation_sync, r31, PIN_ROTATION
 
     // reset the address
     mov     rCurrentAddress, rAddress
 
     ldi     rSliceCount, NUM_SLICES
 slice_start:
-    ldi     rColCount, NUM_COLS + 1 // extra for start frame
+    ldi     rRowCount, NUM_ROWS // extra for start frame
 col_start:
     ldi     rBitCount, NUM_BITS
 col_out:
     // load the next column of bits
     lbbo    r1, rCurrentAddress, 0, 4
-    add     rCurrentAddress, rCurrentAddress, 4
-    lbbo    r2, rCurrentAddress, 0, 4
-    add     rCurrentAddress, rCurrentAddress, 4
+    lbbo    r2, rCurrentAddress, 4, 4
+    add     rCurrentAddress, rCurrentAddress, 8
 
     // clear old output
     sbbo    rMask1, rClear1, 0, 4
@@ -96,8 +93,10 @@ col_out:
     qbne    col_out, rBitCount, 0
 
     // done slice?
-    dec     rColCount
-    qbne    col_start, rColCount, 0
+    dec     rRowCount
+    qbne    col_start, rRowCount, 0
+
+    Delay   LONG_TIME / 256
 
     // done frame?
     dec     rSliceCount
