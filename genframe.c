@@ -16,6 +16,44 @@
 #define NUM_DWORDS      (NUM_BITS * NUM_ROWS * NUM_SLICES)
 #define NUM_FRAME_BYTES (NUM_DWORDS * NUM_GPIO * 4)
 
+typedef enum {
+    FX_RED,
+    FX_GREEN,
+    FX_BLUE,
+    FX_WHITE,
+    FX_STROBE
+} Fx;
+
+Fx effect = FX_STROBE;
+
+uint32_t merge_led(uint8_t r, uint8_t g, uint8_t b) {
+    return (0xff << 24) | (b << 16) | (g << 8) | r;
+}
+
+uint32_t fx_red() {
+    return merge_led(255, 0, 0);
+}
+
+uint32_t fx_green() {
+    return merge_led(255, 0, 0);
+}
+
+uint32_t fx_blue() {
+    return merge_led(255, 0, 0);
+}
+
+uint32_t fx_white() {
+    return merge_led(255, 255, 255);
+}
+
+uint32_t fx_strobe(int slice, int row, int col) {
+    if (slice % 2 == 0) {
+        return merge_led(0, 0, 0);
+    } else {
+        return merge_led(255, 255, 255);
+    }
+}
+
 uint32_t* generateFrame() {
     uint32_t* frameBuffer = malloc(NUM_FRAME_BYTES);
 
@@ -35,12 +73,27 @@ uint32_t* generateFrame() {
                     ledRow[col] = 0;
             } else {
                 for (int col = 0; col < NUM_COLS; col++) {
-                    uint8_t brightness = 0xff;
-                    uint8_t r = 0xff;
-                    uint8_t g = 0xff;
-                    uint8_t b = 0xff;
+                    uint32_t value;
 
-                    ledRow[col] = brightness << 24 | b << 16 | g << 8 | r;
+                    switch (effect) {
+                        case FX_RED:
+                            value = fx_red();
+                            break;
+                        case FX_GREEN:
+                            value = fx_green();
+                            break;
+                        case FX_BLUE:
+                            value = fx_blue();
+                            break;
+                        case FX_WHITE:
+                            value = fx_white();
+                            break;
+                        case FX_STROBE:
+                            value = fx_strobe(slice, row, col);
+                            break;
+                    }
+
+                    ledRow[col] = value;
                 }
             }
 
@@ -63,6 +116,7 @@ uint32_t* generateFrame() {
 
                 // save to buffer
                 int index = NUM_GPIO * (NUM_BITS * (NUM_ROWS * slice + row) + idword);
+                printf("%d\n", index);
 
                 frameBuffer[index  ] = GPIO0;
                 frameBuffer[index+1] = GPIO2;
@@ -73,15 +127,36 @@ uint32_t* generateFrame() {
     return frameBuffer;
 }
 
+void print_usage(char* cmd) {
+    printf("usage: %s [--red | --green | --blue | --strobe]\n", cmd);
+    exit(1);
+}
+
 int main(int argc, char* argv[]) {
     // parse cli arguments
 
     char* filename;
 
     if (argc == 2) {
-        filename = argv[1];
-    } else {
         filename = "gen.dat";
+
+        char* fx = argv[1];
+
+        if (strcmp(fx, "--red") == 0) {
+            effect = FX_RED;
+        } else if(strcmp(fx, "--green") == 0) {
+            effect = FX_GREEN;
+        } else if(strcmp(fx, "--blue") == 0) {
+            effect = FX_BLUE;
+        } else if(strcmp(fx, "--white") == 0) {
+            effect = FX_WHITE;
+        } else if(strcmp(fx, "--strobe") == 0) {
+            effect = FX_STROBE;
+        } else {
+            print_usage(argv[0]);
+        }
+    } else {
+        print_usage(argv[0]);
     }
 
     // gen frame
@@ -90,8 +165,8 @@ int main(int argc, char* argv[]) {
 
     // save frame to file
 
-    FILE *fd = fopen(filename, "wb");
-    fwrite(frame, NUM_FRAME_BYTES, 1, fd);
+    FILE *fd = fopen(filename, "w");
+    fwrite(frame, 1, NUM_FRAME_BYTES, fd);
 
     return 0;
 }
