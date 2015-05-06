@@ -75,6 +75,11 @@ void init_memory() {
 }
 
 void loadFrame(char* filepath) {
+    if (access(filepath, F_OK) == -1) {
+        printf("gen.dat file (LED data) not found!\n(hint: use genframe to generate it)\n");
+        exit(1);
+    }
+
     FILE* fp = fopen(filepath, "rb");
 
     // get the size
@@ -128,7 +133,6 @@ int main(int argc, char* argv[]) {
     // initialize interface to PRU
     pru_debug_init(mem_fd);
 
-
     loadFrame(filepath);
 
     // tell the PRU where to find the data
@@ -136,7 +140,8 @@ int main(int argc, char* argv[]) {
 
     // display!
     prussdrv_exec_program(PRU_NUM, "./driver.bin");
-    getchar(); // hitting enter kills demo
+    printf("running...\nhit enter to stop.\n");
+    getchar();
 
     // cleanup
 
