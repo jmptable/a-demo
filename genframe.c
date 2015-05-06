@@ -116,7 +116,6 @@ uint32_t* generateFrame() {
 
                 // save to buffer
                 int index = NUM_GPIO * (NUM_BITS * (NUM_ROWS * slice + row) + idword);
-                printf("%d\n", index);
 
                 frameBuffer[index  ] = GPIO0;
                 frameBuffer[index+1] = GPIO2;
