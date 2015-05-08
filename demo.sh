@@ -16,6 +16,11 @@ fi
 if [ ! -f /sys/class/uio/uio0/maps/map1/addr ]; then
     echo "Initializing hardware..."
 
+    if [ ! -f /lib/firmware/tube-00A0.dtbo ]; then
+        cp driver/tube-00A0.dtbo /lib/firmware
+        die "please reboot so that the device tree overlay can take effect."
+    fi
+
     modprobe -r uio_pruss
     modprobe uio_pruss extram_pool_sz=0x800000 # 8 megabytes
     echo tube > /sys/devices/bone_capemgr.9/slots
