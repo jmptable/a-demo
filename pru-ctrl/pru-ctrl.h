@@ -1,5 +1,5 @@
-#ifndef H_PRU_DEBUG
-#define H_PRU_DEBUG
+#ifndef H_PRU_CTRL
+#define H_PRU_CTRL
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -21,8 +21,8 @@
 #define PRU_STATUS_REG      0x0001
 #define PRU_INTGPR_REG      0x0100
 
-int pru_debug_init(int mem_fd);
-void pru_debug_exit();
+int pru_ctrl_init(int mem_fd);
+void pru_ctrl_exit();
 
 void pru_load_program(char* filename);
 

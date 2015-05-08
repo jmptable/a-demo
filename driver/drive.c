@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "pru-debug.h"
+#include "pru-ctrl.h"
 #include "pru-interface.hp"
 
 #include "prussdrv.h"
@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
     init_memory();
 
     // initialize interface to PRU
-    pru_debug_init(mem_fd);
+    pru_ctrl_init(mem_fd);
 
     loadFrame(filepath);
 
@@ -148,7 +148,7 @@ int main(int argc, char* argv[]) {
     // disable pru
     prussdrv_pru_disable(PRU_NUM);
     prussdrv_exit();
-    pru_debug_exit();
+    pru_ctrl_exit();
 
     // undo memory mapping
     munmap(ddrMem, 0x0FFFFFFF);

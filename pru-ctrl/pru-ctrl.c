@@ -3,20 +3,20 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
-#include "pru-debug.h"
+#include "pru-ctrl.h"
 
 #define PRU_LEN         0x40000
 #define OPT_PRU_ADDR    0x4a300000
 
 static uint32_t* pruMem;
 
-int pru_debug_init(int mem_fd) {
+int pru_ctrl_init(int mem_fd) {
     pruMem = (uint32_t*)mmap(0, PRU_LEN, PROT_WRITE | PROT_READ, MAP_SHARED, mem_fd, OPT_PRU_ADDR);
 
     return pruMem == NULL? -1 : 1;
 }
 
-void pru_debug_exit() {
+void pru_ctrl_exit() {
     munmap(pruMem, PRU_LEN);
 }
 
