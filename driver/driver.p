@@ -27,6 +27,7 @@
 #define rBitCount       r14
 
 #define rAddress        REG_ADDRESS
+#define rSliceTotal     REG_SLICE_TOTAL
 
 .setcallreg RET_REG
 
@@ -65,7 +66,7 @@ rotation_sync:
     // reset the address
     mov     rCurrentAddress, rAddress
 
-    ldi     rSliceCount, NUM_SLICES
+    mov     rSliceCount, rSliceTotal
 slice_start:
     ldi     rRowCount, NUM_ROWS // extra for start frame
 col_start:

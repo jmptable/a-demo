@@ -15,8 +15,11 @@
 
 #define PRU_NUM 1
 
+// TODO fewer globals...
+
 static int mem_fd;
 static uint32_t* ddrMem;
+int sliceCount;
 
 uint32_t readHexFromFile(char* filepath) {
     FILE* fp = fopen(filepath, "r");
@@ -90,14 +93,15 @@ void loadFrame(char* filepath) {
 
     // validate size
     
-    if (fsize != NUM_FRAME_BYTES) {
-        printf("Need file with %d bytes. Got file with %d bytes.\n", NUM_FRAME_BYTES, (unsigned int)fsize);
+    if (fsize % BYTE_SIZE_SLICE != 0) {
+        printf("LED data needs to be divisible by the size of a slice (%d bytes).\n", BYTE_SIZE_SLICE);
         exit(1);
     }
 
-    if (get_ddr_size() < NUM_FRAME_BYTES) {
-        printf("The size of shared memory is too small! Need %d bytes but only have %d.\n", NUM_FRAME_BYTES, get_ddr_size());
-        printf("To set it correctly: \"modprobe uio_pruss extram_pool_sz=%x\"\n", NUM_FRAME_BYTES);
+    sliceCount = fsize / BYTE_SIZE_SLICE;
+
+    if (get_ddr_size() < fsize) {
+        printf("The size of shared memory is too small! Need %d bytes but only have %d.\n", fsize, get_ddr_size());
         exit(1);
     }
 
@@ -137,6 +141,9 @@ int main(int argc, char* argv[]) {
 
     // tell the PRU where to find the data
     pru_write_reg(REG_ADDRESS, (uint32_t)get_ddr_address());
+
+    // tell the PRU how many slices we have
+    pru_write_reg(REG_SLICE_TOTAL, sliceCount);
 
     // display!
     prussdrv_exec_program(PRU_NUM, "./driver.bin");
