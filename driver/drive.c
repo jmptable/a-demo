@@ -101,7 +101,7 @@ void loadFrame(char* filepath) {
     sliceCount = fsize / BYTE_SIZE_SLICE;
 
     if (get_ddr_size() < fsize) {
-        printf("The size of shared memory is too small! Need %d bytes but only have %d.\n", fsize, get_ddr_size());
+        printf("The size of shared memory is too small! Need %d bytes but only have %d.\n", (int)fsize, get_ddr_size());
         exit(1);
     }
 

@@ -7,6 +7,8 @@
 #define NUM_ROWS        (NUM_LED_ROWS + 2) // extras for start frame and end frame
 #define NUM_COLS        32
 
+#define BYTE_SIZE_SLICE (4 * 32 * NUM_GPIO * NUM_ROWS)
+
 // # of unsplit dwords
 #define NUM_DWORDS      (NUM_BITS * NUM_ROWS * NUM_SLICES)
 #define NUM_FRAME_BYTES (NUM_DWORDS * NUM_GPIO * 4)
