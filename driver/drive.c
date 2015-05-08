@@ -79,7 +79,7 @@ void init_memory() {
 
 void loadFrame(char* filepath) {
     if (access(filepath, F_OK) == -1) {
-        printf("gen.dat file (LED data) not found!\n(hint: use genframe to generate it)\n");
+        printf("%s not found!", filepath);
         exit(1);
     }
 
@@ -118,7 +118,8 @@ int main(int argc, char* argv[]) {
     if (argc == 2) {
         filepath = argv[1];
     } else {
-        filepath = "gen.dat";
+        printf("usage: %s some-led-data.dat\n", argv[0]);
+        exit(1);
     }
 
     prussdrv_init();
