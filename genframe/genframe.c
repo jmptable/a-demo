@@ -6,15 +6,13 @@
 #include <unistd.h>
 #include <string.h>
 
-#define NUM_SLICES  8
-#define NUM_GPIO    2
-#define NUM_BITS    32
-#define NUM_ROWS    (64 + 1) // extra for start frame
-#define NUM_COLS    32
+#define NUM_GPIO        2
+#define NUM_BITS        32
+#define NUM_LED_ROWS    64
+#define NUM_ROWS        (NUM_LED_ROWS + 2) // extra for start frame and end frame
+#define NUM_STRIPS      32
 
-// # of unsplit dwords
-#define NUM_DWORDS      (NUM_BITS * NUM_ROWS * NUM_SLICES)
-#define NUM_FRAME_BYTES (NUM_DWORDS * NUM_GPIO * 4)
+#define BYTE_SIZE_SLICE (4 * 32 * NUM_GPIO * NUM_ROWS)
 
 typedef enum {
     FX_RED,
@@ -54,72 +52,77 @@ uint32_t fx_strobe(int slice, int row, int col) {
     }
 }
 
-uint32_t* generateFrame() {
-    uint32_t* frameBuffer = malloc(NUM_FRAME_BYTES);
+uint32_t* generateFrame(int sliceCount) {
+    uint32_t* frameBuffer = calloc(1, BYTE_SIZE_SLICE * sliceCount);
 
     if (frameBuffer == NULL) {
         printf("Frame memory allocation failed.\n");
         exit(1);
     }
 
-    for (int slice = 0; slice < NUM_SLICES; slice++) {
-        for (int row = 0; row < NUM_ROWS; row++) {
-            uint32_t ledRow[NUM_ROWS]; // for led values in this row
+    for (int slice = 0; slice < sliceCount; slice++) {
+        for (int row = 0; row < NUM_LED_ROWS; row++) {
+            uint32_t ledRow[NUM_LED_ROWS]; // for led values in this row
 
             // generate pixels for this row
-            if (row == 0) {
-                // first row out is zeroes to init LEDs
-                for (int col = 0; col < NUM_COLS; col++)
-                    ledRow[col] = 0;
-            } else {
-                for (int col = 0; col < NUM_COLS; col++) {
-                    uint32_t value;
+            for (int strip = 0; strip < NUM_STRIPS; strip++) {
+                uint32_t value;
 
-                    switch (effect) {
-                        case FX_RED:
-                            value = fx_red();
-                            break;
-                        case FX_GREEN:
-                            value = fx_green();
-                            break;
-                        case FX_BLUE:
-                            value = fx_blue();
-                            break;
-                        case FX_WHITE:
-                            value = fx_white();
-                            break;
-                        case FX_STROBE:
-                            value = fx_strobe(slice, row, col);
-                            break;
-                    }
-
-                    ledRow[col] = value;
+                switch (effect) {
+                    case FX_RED:
+                        value = fx_red();
+                        break;
+                    case FX_GREEN:
+                        value = fx_green();
+                        break;
+                    case FX_BLUE:
+                        value = fx_blue();
+                        break;
+                    case FX_WHITE:
+                        value = fx_white();
+                        break;
+                    case FX_STROBE:
+                        value = fx_strobe(slice, row, strip);
+                        break;
+                    default:
+                        value = 0;
                 }
+
+                ledRow[strip] = value;
             }
+
 
             // peel off bits into dwords serialized for the 32 outputs
 
-            // # columns must be number of bits in each element
             uint32_t serialBuffer[NUM_BITS] = {0};
 
             for (int bit = 0; bit < NUM_BITS; bit++) {
-                for (int col = 0; col < NUM_COLS; col++) {
-                    serialBuffer[NUM_BITS - bit - 1] |= ((ledRow[col] >> bit) & 1) << col;
+                for (int strip = 0; strip < NUM_STRIPS; strip++) {
+                    if (ledRow[strip] & (1 << bit))
+                        serialBuffer[bit] |= 1 << strip;
                 }
             }
 
+            // split into the two GPIOs
+
             for (int idword = 0; idword < NUM_BITS; idword++) {
-                // split bits to match connections to GPIO registers
                 uint32_t v = serialBuffer[idword];
-                uint32_t GPIO0 = ((v & 0xff00) << 4) | (v & 0xff); // bits 0 -> 7 and 12 -> 19
+                uint32_t GPIO1 = ((v & 0xff00) << 4) | (v & 0xff); // bits 0 -> 7 and 12 -> 19
                 uint32_t GPIO2 = (v >> 16) << 2; // bits 2 -> 17
 
-                // save to buffer
-                int index = NUM_GPIO * (NUM_BITS * (NUM_ROWS * slice + row) + idword);
+                // save to buffer (offset 1 for start frame)
+                int index = NUM_GPIO * (NUM_BITS * (NUM_ROWS * slice + row + 1) + idword);
 
-                frameBuffer[index  ] = GPIO0;
+                frameBuffer[index  ] = GPIO1;
                 frameBuffer[index+1] = GPIO2;
             }
+        }
+
+        // last row is all 1s
+        for (int bit = 0; bit < 32; bit++) {
+            int index = NUM_GPIO * (NUM_BITS * (NUM_ROWS * slice + NUM_ROWS-1) + bit);
+            frameBuffer[index  ] = 0xff0ff;
+            frameBuffer[index+1] = 0xffff << 2;
         }
     }
 
@@ -127,7 +130,7 @@ uint32_t* generateFrame() {
 }
 
 void print_usage(char* cmd) {
-    printf("usage: %s [--red | --green | --blue | --strobe]\n", cmd);
+    printf("usage: %s #slices filename [--red | --green | --blue | --strobe]\n", cmd);
     exit(1);
 }
 
@@ -135,11 +138,12 @@ int main(int argc, char* argv[]) {
     // parse cli arguments
 
     char* filename;
+    int slices;
 
-    if (argc == 2) {
-        filename = "gen.dat";
+    if (argc == 4) {
+        filename = argv[2];
 
-        char* fx = argv[1];
+        char* fx = argv[3];
 
         if (strcmp(fx, "--red") == 0) {
             effect = FX_RED;
@@ -154,18 +158,23 @@ int main(int argc, char* argv[]) {
         } else {
             print_usage(argv[0]);
         }
+
+        slices = atoi(argv[1]);
+
+        if (slices == 0)
+            printf("#slices must not be zero.\n");
     } else {
         print_usage(argv[0]);
     }
 
     // gen frame
 
-    uint32_t* frame = generateFrame();
+    uint32_t* frame = generateFrame(slices);
 
     // save frame to file
 
     FILE *fd = fopen(filename, "w");
-    fwrite(frame, 1, NUM_FRAME_BYTES, fd);
+    fwrite(frame, 1, slices * BYTE_SIZE_SLICE, fd);
 
     return 0;
 }
