@@ -6,6 +6,8 @@
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
+#include <termios.h>
+#include <sys/select.h>
 
 #include <time.h>
 
@@ -29,6 +31,43 @@
 static int mem_fd;
 static uint32_t* ddrMem;
 static uint32_t* frameBuffer;
+
+struct termios orig_termios;
+
+void reset_terminal_mode() {
+    tcsetattr(0, TCSANOW, &orig_termios);
+}
+
+void set_conio_terminal_mode() {
+    struct termios new_termios;
+
+    /* take two copies - one for now, one for later */
+    tcgetattr(0, &orig_termios);
+    memcpy(&new_termios, &orig_termios, sizeof(new_termios));
+
+    /* register cleanup handler, and set the new terminal mode */
+    atexit(reset_terminal_mode);
+    cfmakeraw(&new_termios);
+    tcsetattr(0, TCSANOW, &new_termios);
+}
+
+int kbhit() {
+    struct timeval tv = { 0L, 0L };
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(0, &fds);
+    return select(1, &fds, NULL, NULL, &tv);
+}
+
+int getch() {
+    int r;
+    unsigned char c;
+    if ((r = read(0, &c, sizeof(c))) < 0) {
+        return r;
+    } else {
+        return c;
+    }
+}
 
 uint32_t readHexFromFile(char* filepath) {
     FILE* fp = fopen(filepath, "r");
@@ -142,21 +181,9 @@ void generateFrame() {
     }
 }
 
-int main(int argc, char* argv[]) {
-    initPRU();
-    frameBuffer = ddrMem;
-
-    // clear PRU registers
-    for (int i = 0; i < 30; i++)
-        pru_write_reg(i, 0);
-
-    uint32_t address = readHexFromFile("/sys/class/uio/uio0/maps/map1/addr");
-    uint32_t size = readHexFromFile("/sys/class/uio/uio0/maps/map1/size");
-
-    printf("ddr mem address is %x\n", address);
-    printf("ddr mem size is %x\n", size);
-
+void test_indexing() {
     // give the PRU the address of shared DDR
+    uint32_t address = readHexFromFile("/sys/class/uio/uio0/maps/map1/addr");
     pru_write_reg(11, address);
 
     // single step the PRU
@@ -192,6 +219,39 @@ int main(int argc, char* argv[]) {
     }
 
     prussdrv_pru_disable(PRU_NUM);
+}
+
+void test_timer() {
+    // give the PRU the address of shared DDR
+    uint32_t address = readHexFromFile("/sys/class/uio/uio0/maps/map1/addr");
+    pru_write_reg(11, address);
+
+    pru_load_program("./test-timer.bin");
+    pru_enable();
+
+    printf("hit a key to stop\n");
+    do {
+        int countsPerMilli = 200000;
+        float millis = (float)ddrMem[0] / countsPerMilli;
+        printf("sync is happening every %f milliseconds.      \r", millis);
+        fflush(stdout);
+        usleep(100000);
+    } while (!kbhit());
+    (void)getch();
+    printf("\n");
+
+    prussdrv_pru_disable(PRU_NUM);
+}
+
+int main(int argc, char* argv[]) {
+    initPRU();
+    frameBuffer = ddrMem;
+
+    // clear PRU registers
+    for (int i = 0; i < 30; i++)
+        pru_write_reg(i, 0);
+
+    test_timer();
 
     prussdrv_exit();
     pru_ctrl_exit();
