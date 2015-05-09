@@ -2,7 +2,7 @@
 
 #define RET_REG     r29.w0
 
-#include "macros.p"
+#include <macros.p>
 #include "pru-interface.hp"
 
 #define PIN_ROTATION    13

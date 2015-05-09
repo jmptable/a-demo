@@ -1,8 +1,8 @@
-#include <../pru.h>
+#include <pru.h>
 
 #define RET_REG     r28.w0
 
-#include "../macros.p"
+#include <macros.p>
 
 #define PIN_ROTATION    13
 #define PIN_CLOCK       22

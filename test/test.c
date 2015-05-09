@@ -12,7 +12,7 @@
 #include "prussdrv.h"
 #include <pruss_intc_mapping.h>
 
-#include "pru-debug.h"
+#include "pru-ctrl.h"
 
 #define PRU_NUM 1
 
@@ -72,10 +72,10 @@ void initPRU() {
         exit(1);
     }
 
-    ret = pru_debug_init(mem_fd);
+    ret = pru_ctrl_init(mem_fd);
 
     if (ret == -1) {
-        printf("Failed to initialize pru-debug (%s)\n", strerror(errno));
+        printf("Failed to initialize pru-ctrl (%s)\n", strerror(errno));
         close(mem_fd);
         exit(1);
     }
@@ -194,7 +194,7 @@ int main(int argc, char* argv[]) {
     prussdrv_pru_disable(PRU_NUM);
 
     prussdrv_exit();
-    pru_debug_exit();
+    pru_ctrl_exit();
 
     // undo memory mapping
     munmap(ddrMem, 0x0FFFFFFF);
