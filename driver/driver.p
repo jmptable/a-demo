@@ -18,8 +18,6 @@
 #define PIN_CLOCK       8
 
 #define MASK_CLOCK      1 << PIN_CLOCK
-#define MASK_GPIO1      0x000ff0ff
-#define MASK_GPIO2      (0xffff << 2)
 
 #define rClear1         r2
 #define rSet1           r3
