@@ -30,4 +30,4 @@ if [ ! -f /sys/class/uio/uio0/maps/map1/addr ]; then
     fi
 fi
 
-cd driver; ./drive $1
+cd display; ./display $1
