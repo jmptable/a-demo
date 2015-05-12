@@ -57,7 +57,7 @@
 			tube_pins: pinmux_tube_pins {
 				pinctrl-single,pins = <
                     0x084 0x36 // gpio1_31 (SENSOR_ROTATION) pru input, pullup
-					0x0e0 0x07 // gpio2_22 (CLOCK)
+					0x0e0 0x05 // gpio2_22 (CLOCK)
 
 					0x000 0x07 // gpio1_0
                     0x004 0x07 // gpio1_1
