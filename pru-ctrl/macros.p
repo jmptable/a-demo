@@ -61,3 +61,9 @@ delay_loop:
     mov     r1, GPIO2_CLOCK
     sbbo    r0, r1, 0, 4
 .endm
+
+.macro Die
+    // notify host program of finish
+    mov     r31.b0, PRU0_ARM_INTERRUPT + 16
+    halt
+.endm
