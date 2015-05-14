@@ -13,6 +13,8 @@
 #include "prussdrv.h"
 #include <pruss_intc_mapping.h>
 
+#define BYTE_SIZE_SLICE (4 * NUM_ROWS * NUM_COLS)
+
 #define PRU_NUM 1
 
 // TODO fewer globals...
@@ -77,9 +79,27 @@ void init_memory() {
     }
 }
 
-uint32_t crc32(uint8_t* buffer, int len) {
-    // TODO
-    return 0;
+/*  [1 0 0]    [0 1 0]    [1 0 0]
+    [0 1 1] -> [0 1 0] -> [0 1 1]
+    [0 0 0]    [0 0 1]    [0 0 0]
+    Input MUST be exactly 32 * 4 bytes large.
+    Operation happens in-place.
+*/
+void reorientBits(uint32_t* rows) {
+    uint32_t columns[32];
+
+    for (int colIndex = 0; colIndex < 32; colIndex++) {
+        uint32_t column = 0;
+
+        for (int rowIndex = 0; rowIndex < 32; rowIndex++) {
+            if ((rows[rowIndex] & (1 << colIndex)) > 0)
+                column |= 1 << rowIndex;
+        }
+
+        columns[colIndex] = column;
+    }
+
+    memcpy(rows, columns, 32 * sizeof(uint32_t));
 }
 
 void load_frame(char* filepath) {
@@ -98,11 +118,6 @@ void load_frame(char* filepath) {
 
     // validate size
 
-    if (fsize <= 2) {
-        printf("Not enough data (need at least 8 bytes of header).\n");
-        exit(1);
-    }
-
     if (get_ddr_size() < fsize) {
         int ddrSize = get_ddr_size();
         printf("The size of shared memory is too small! Need %d bytes but only have %d.\n", (int)fsize, ddrSize);
@@ -114,50 +129,29 @@ void load_frame(char* filepath) {
     }
 
     // read the file
-    uint32_t* frame = (uint32_t*)malloc(fsize);
-    fread(frame, fsize, 1, fp);
+    uint32_t* fileData = (uint32_t*)malloc(fsize);
+    fread(fileData, fsize, 1, fp);
     fclose(fp);
 
-    // get metadata
-    uint32_t flags = frame[0];
-    uint32_t crc = frame[1];
-
-    int dataLen = fsize - 2 * sizeof(uint32_t);
-    uint32_t* ledData = frame + 2 * sizeof(uint32_t);
-    int byteSizeSlice;
-
-    // check crc
-    if (crc != crc32((uint8_t*)ledData, dataLen)) {
-        printf("CRC check failed. Bad data?");
+    if (fsize % BYTE_SIZE_SLICE != 0) {
+        printf("LED data needs to be divisible by the size of a slice (%d bytes).\n", BYTE_SIZE_SLICE);
         exit(1);
     }
 
-    // process flags
-    switch (flags) {
-        case 1:
-            // split into GPIOs
-            byteSizeSlice = 4 * NUM_GPIO * 32 * NUM_ROWS;
-            break;
-        case 2:
-            // unsplit
-            byteSizeSlice = 4 * 32 * NUM_ROWS;
-            break;
-        case 0:
-        default:
-            printf("Led data begins with unrecognized flags %x.\n", flags);
-            exit(1);
-    }
-    
-    if (dataLen % byteSizeSlice != 0) {
-        printf("LED data needs to be divisible by the size of a slice (%d bytes).\n", byteSizeSlice);
-        exit(1);
-    }
-
-    sliceCount = dataLen / byteSizeSlice;
+    sliceCount = fsize / BYTE_SIZE_SLICE;
 
     // copy the data into shared memory
-    memcpy(ddrMem, ledData, dataLen);
-    free(frame);
+
+    for (int slice = 0; slice < sliceCount; slice++) {
+        for (int row = 0; row < NUM_ROWS; row++) {
+            int index = 4 * 32 * (NUM_ROWS * slice + row);
+            reorientBits(fileData + index);
+        }
+    }
+
+    memcpy(ddrMem, fileData, fsize);
+
+    free(fileData);
 }
 
 int main(int argc, char* argv[]) {
